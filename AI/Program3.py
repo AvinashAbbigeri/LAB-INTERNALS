@@ -1,12 +1,9 @@
-!pip install gensim matplotlib
-
 from gensim.models import Word2Vec
-from gensim.models.word2vec import LineSentence
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 import numpy as np
 
-medical_corpus = [
+corpus = [
     "The patient was diagnosed with diabetes and hypertension.",
     "MRI scans reveal abnormalities in the brain tissue.",
     "The treatment involves antibiotics and regular monitoring.",
@@ -19,24 +16,12 @@ medical_corpus = [
     "The diagnosis confirmed a rare genetic disorder."
 ]
 
-processed_corpus = [sentence.lower().split() for sentence in medical_corpus]
+sentences = [s.lower().split() for s in corpus]
+model = Word2Vec(sentences, vector_size=100, window=5, min_count=1, workers=4, epochs=50)
 
-print("Training Word2Vec model...")
-model = Word2Vec(
-    sentences=processed_corpus,
-    vector_size=100,
-    window=5,
-    min_count=1,
-    workers=4,
-    epochs=50
-)
-print("Model training complete!")
-
-words = list(model.wv.index_to_key)
-embeddings = np.array([model.wv[word] for word in words])
-
-tsne = TSNE(n_components=2, random_state=42, perplexity=5, max_iter=300)
-tsne_result = tsne.fit_transform(embeddings)
+words = model.wv.index_to_key
+embeddings = np.array([model.wv[w] for w in words])
+tsne_result = TSNE(n_components=2, random_state=42, perplexity=5, max_iter=300).fit_transform(embeddings)
 
 plt.figure(figsize=(10, 8))
 plt.scatter(tsne_result[:, 0], tsne_result[:, 1], color="blue")
@@ -48,14 +33,13 @@ plt.ylabel("Dimension 2")
 plt.grid(True)
 plt.show()
 
-def find_similar_words(input_word, top_n=5):
+def find_similar(word, n=5):
     try:
-        similar_words = model.wv.most_similar(input_word, topn=top_n)
-        print(f"Words similar to '{input_word}':")
-        for word, similarity in similar_words:
-            print(f"{word} ({similarity:.2f})")
+        print(f"Words similar to '{word}':")
+        for w, sim in model.wv.most_similar(word, topn=n):
+            print(f"{w} ({sim:.2f})")
     except KeyError:
-        print(f"'{input_word}' not found in vocabulary.")
+        print(f"'{word}' not found in vocabulary.")
 
-find_similar_words("treatment")
-find_similar_words("vaccine")
+find_similar("treatment")
+find_similar("vaccine")

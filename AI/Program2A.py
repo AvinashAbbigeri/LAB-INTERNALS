@@ -5,48 +5,31 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 print("Loading pre-trained word vectors...")
-word_vectors = api.load("word2vec-google-news-300")
+wv = api.load("word2vec-google-news-300")
 
-def explore_word_relationships(word1, word2, word3):
+def explore_word_relationships(w1, w2, w3):
     try:
-        result_vector = word_vectors[word1] - word_vectors[word2] + word_vectors[word3]
-        similar_words = word_vectors.similar_by_vector(result_vector, topn=10)
-        input_words = (word1, word2, word3)
-        filtered_words = [(word, similarity) for word, similarity in similar_words if word not in input_words]
-        print(f"\nWord Relationship: {word1} - {word2} + {word3}")
-        print("Most similar words to the result (excluding input words):")
-        for word, similarity in filtered_words[:5]: 
-            print(f"{word}: {similarity:.4f}") 
-        return filtered_words 
-    except KeyError as e: 
-        print(f"Error: {e} not found in the vocabulary.") 
-        return []
+        res = wv[w1] - wv[w2] + wv[w3]
+        sim = [(w, s) for w, s in wv.similar_by_vector(res, topn=10) if w not in (w1, w2, w3)]
+        print(f"\nWord Relationship: {w1} - {w2} + {w3}\nMost similar words (excluding input):")
+        for w, s in sim[:5]: print(f"{w}: {s:.4f}")
+        return sim
+    except KeyError as e:
+        print(f"Error: {e} not in vocabulary."); return []
 
-def visualize_word_embeddings(words, vectors, method='pca'):
-    if method == 'pca':
-        reducer = PCA(n_components=2)
-    elif method == 'tsne':
-        reducer = TSNE(n_components=2, random_state=42, perplexity=3) 
-    else:
-        raise ValueError("Method must be 'pca' or 'tsne'.")
+def visualize(words, method='pca'):
+    reducer = PCA(n_components=2) if method == 'pca' else TSNE(n_components=2, random_state=42, perplexity=3)
+    vecs = np.array([wv[w] for w in words])
+    reduced = reducer.fit_transform(vecs)
+    plt.figure(figsize=(10,8))
+    for i, w in enumerate(words):
+        plt.scatter(*reduced[i], color='blue')
+        plt.text(reduced[i,0]+.02, reduced[i,1]+.02, w, fontsize=12)
+    plt.title(f"Word Embeddings Visualization using {method.upper()}")
+    plt.xlabel("Component 1"); plt.ylabel("Component 2"); plt.grid(True); plt.show()
 
-    reduced_vectors = reducer.fit_transform(vectors) 
-
-    plt.figure(figsize=(10, 8)) 
-    for i, word in enumerate(words): 
-        plt.scatter(reduced_vectors[i, 0], reduced_vectors[i, 1], marker='o', color='blue') 
-        plt.text(reduced_vectors[i, 0] + 0.02, reduced_vectors[i, 1] + 0.02, word, fontsize=12) 
-    plt.title(f"Word Embeddings Visualization using {method.upper()}") 
-    plt.xlabel("Component 1") 
-    plt.ylabel("Component 2") 
-    plt.grid(True) 
-    plt.show() 
-
-words_to_explore = ["king", "man", "woman", "queen", "prince", "princess", "royal", "throne"] 
-filtered_words = explore_word_relationships("king", "man", "woman")
-
-words_to_visualize = words_to_explore + [word for word, _ in filtered_words] 
-vectors_to_visualize = np.array([word_vectors[word] for word in words_to_visualize]) 
-
-visualize_word_embeddings(words_to_visualize, vectors_to_visualize, method='pca')
-visualize_word_embeddings(words_to_visualize, vectors_to_visualize, method='tsne')
+words = ["king", "man", "woman", "queen", "prince", "princess", "royal", "throne"]
+filtered = explore_word_relationships("king", "man", "woman")
+all_words = words + [w for w, _ in filtered]
+visualize(all_words, 'pca')
+visualize(all_words, 'tsne')

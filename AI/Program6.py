@@ -1,29 +1,7 @@
-!pip install transformers
-!pip install ipywidgets
-
 from transformers import pipeline
 
-print("Loading Sentiment Analysis Model...")
-sentiment_analyzer = pipeline("sentiment-analysis")
-
-def analyze_sentiment(text):
-    """
-    Analyze the sentiment of a given text input.
-
-    Args:
-        text (str): Input sentence or paragraph.
-
-    Returns:
-        dict: Sentiment label and confidence score.
-    """
-    result = sentiment_analyzer(text)[0]  # Get the first result
-    label = result['label']  # Sentiment Label (POSITIVE/NEGATIVE)
-    score = result['score']  # Confidence score
-    print(f"\nInput Text: {text}")
-    print(f"Sentiment: {label} (Confidence: {score:.4f})\n")
-    return result
-
-customer_reviews = [
+analyze = pipeline("sentiment-analysis")
+reviews = [
     "The product is amazing! I love it so much.",
     "I'm very disappointed. The service was terrible.",
     "It was an average experience, nothing special.",
@@ -32,5 +10,7 @@ customer_reviews = [
 ]
 
 print("\nCustomer Sentiment Analysis Results:")
-for review in customer_reviews:
-    analyze_sentiment(review)
+for text in reviews:
+    res = analyze(text)[0]
+    print(f"\nInput Text: {text}")
+    print(f"Sentiment: {res['label']} (Confidence: {res['score']:.4f})\n")

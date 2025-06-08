@@ -1,9 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Optional
-import wikipediaapi
-import requests
+import wikipediaapi, requests, re
 from bs4 import BeautifulSoup
-import re
 
 class InstitutionProfile(BaseModel):
     founder: Optional[str] = "Unknown"
@@ -12,79 +10,46 @@ class InstitutionProfile(BaseModel):
     employee_count: Optional[int] = 0
     summary: str
 
-def fetch_wikipedia_data(institution_name: str) -> dict:
-    user_agent = "MyInstitutionInfoBot/1.0 (contact: your-email@example.com)"
-    wiki_wiki = wikipediaapi.Wikipedia(user_agent=user_agent, language="en")
-    page = wiki_wiki.page(institution_name)
-    if not page.exists():
-        raise ValueError(f"Wikipedia page for '{institution_name}' not found.")
-    summary = page.summary[:300] 
-    wiki_url = f"https://en.wikipedia.org/wiki/{institution_name.replace(' ', '_')}"
-    headers = {"User-Agent": user_agent}
-    response = requests.get(wiki_url, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
+def fetch_dbpedia_data(name):
+    url = f"https://dbpedia.org/data/{name.replace(' ', '_')}.json"
+    r = requests.get(url, headers={"User-Agent": "MyInstitutionInfoBot/1.0"})
+    if r.status_code != 200: return {}
+    j = r.json(); e = f"http://dbpedia.org/resource/{name.replace(' ', '_')}"
+    return {"founder": j.get(e, {}).get("http://dbpedia.org/ontology/foundedBy", [{}])[0].get("value", "Unknown")}
+
+def fetch_wikipedia_data(name):
+    ua = "MyInstitutionInfoBot/1.0 (contact: your-email@example.com)"
+    wiki = wikipediaapi.Wikipedia(user_agent=ua, language="en")
+    page = wiki.page(name)
+    if not page.exists(): raise ValueError(f"Wikipedia page for '{name}' not found.")
+    summary = page.summary[:300]
+    url = f"https://en.wikipedia.org/wiki/{name.replace(' ', '_')}"
+    soup = BeautifulSoup(requests.get(url, headers={"User-Agent": ua}).text, "html.parser")
     infobox = soup.find("table", {"class": "infobox"})
-    data = {
-        "founder": "Unknown",
-        "Established": 0,
-        "branches": ["Unknown"],
-        "employee_count": 0,
-        "summary": summary,
-    }
+    d = {"founder": "Unknown", "Established": 0, "branches": ["Unknown"], "employee_count": 0, "summary": summary}
     if infobox:
         for row in infobox.find_all("tr"):
-            header = row.find("th")
-            value = row.find("td")
-            if header and value:
-                key = header.text.strip()
-                val = value.text.strip()
-                if key in ["Founder", "Founders", "Founder(s)"]:
-                    data["founder"] = val
-                elif key in ["Established", "Founded", "Formation"]:
-                    match = re.search(r"\b(18\d{2}|19\d{2}|20\d{2})\b", val)
-                    if match:
-                        data["Established"] = int(match.group(0))
-                elif key in ["Total staff", "Employees", "Staff"]:
-                    match = re.search(r"(\d{3,5})", val)
-                    if match:
-                        data["employee_count"] = int(match.group(0))
-                elif key in ["Address", "Location"]:
-                    data["branches"] = [val.split(",")[0]] 
-    if data["founder"] == "Unknown":
-        dbpedia_data = fetch_dbpedia_data(institution_name)
-        data.update(dbpedia_data)
-    return data
+            h, v = row.find("th"), row.find("td")
+            if h and v:
+                k, val = h.text.strip(), v.text.strip()
+                if k in ["Founder", "Founders", "Founder(s)"]: d["founder"] = val
+                elif k in ["Established", "Founded", "Formation"]:
+                    m = re.search(r"\b(18\d{2}|19\d{2}|20\d{2})\b", val)
+                    if m: d["Established"] = int(m.group(0))
+                elif k in ["Total staff", "Employees", "Staff"]:
+                    m = re.search(r"(\d{3,5})", val)
+                    if m: d["employee_count"] = int(m.group(0))
+                elif k in ["Address", "Location"]: d["branches"] = [val.split(",")[0]]
+    if d["founder"] == "Unknown": d.update(fetch_dbpedia_data(name))
+    return d
 
-def fetch_dbpedia_data(institution_name: str) -> dict:
-    dbpedia_url = f"https://dbpedia.org/data/{institution_name.replace(' ', '_')}.json"
-    headers = {"User-Agent": "MyInstitutionInfoBot/1.0"}
-    response = requests.get(dbpedia_url, headers=headers)
-    if response.status_code != 200:
-        return {}
-    dbpedia_json = response.json()
-    entity_url = f"http://dbpedia.org/resource/{institution_name.replace(' ', '_')}"
-    data = {"founder": "Unknown"}
-    if entity_url in dbpedia_json:
-        entity = dbpedia_json[entity_url]
-        if "http://dbpedia.org/ontology/foundedBy" in entity:
-            data["founder"] = entity["http://dbpedia.org/ontology/foundedBy"][0]["value"]
-    return data
-
-def create_institution_profile(institution_name: str) -> InstitutionProfile:
-    data = fetch_wikipedia_data(institution_name)
-    profile = InstitutionProfile(
-        founder=data["founder"],
-        Established=data["Established"],
-        branches=data["branches"],
-        employee_count=data["employee_count"],
-        summary=data["summary"],
-    )
-    return profile
+def create_institution_profile(name):
+    d = fetch_wikipedia_data(name)
+    return InstitutionProfile(**d)
 
 if __name__ == "__main__":
-    institution_name = input("Enter institution name: ")
+    name = input("Enter institution name: ")
     try:
-        profile = create_institution_profile(institution_name)
-        print(profile.model_dump_json(indent=2))
+        print(create_institution_profile(name).model_dump_json(indent=2))
     except ValueError as e:
         print(e)
